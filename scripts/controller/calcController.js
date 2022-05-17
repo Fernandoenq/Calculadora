@@ -1,6 +1,8 @@
 class CalcController{
     constructor(){
 
+        this._audio = new Audio('click.mp3');
+        this._audioOnOff = false//para controlar o estado do audio
         this._operation = []; //onde sera guardado a operação do usuário na calculadora 
         this._lastOperator = '';
         this._lastNumber = '';
@@ -15,7 +17,28 @@ class CalcController{
         this._currentDate;
         this.initialize();//executa quando começa
         this.initButtonEvents();//o principal que pega a ação do mouse sobre os bottões
+        this.initKeyboard(); //metodo para iniciar a detecção das teclas do teclado
+        this.copyToClipBoard();//metodo para o copiar e colar ctrl + C e ctrl + V
+        //this.pastFromClipBoard();//Metodo para colar
     }
+
+    pastFromClipBoard(){
+        document.addEventListener('paste', e=>{//ao precionar o ctrl + v
+           let text = e.clipboardData.getData('Text')//pegado o texto copiado
+           console.log(text)
+           this.displayCalc = parseFloat(text)
+        })
+    }
+
+    copyToClipBoard(){
+        let input = document.createElement('input')//criando um elemento dinamico na tela
+        input.value = this.displayCalc//colcando o valor que esta na tela
+        document.body.appendChild(input)//agora ele estará na tela
+        input.select()//agora é possivel selecionar o conteudo
+        document.execCommand("Copy")
+        input.remove()
+    }
+    
 
     initialize(){ 
         this.setDisplayDateTime()
@@ -42,7 +65,12 @@ class CalcController{
             this.setDisplayDateTime();
         },  1000); 
         this.setLastNumberToDisplay();
-        
+        this.pastFromClipBoard();
+        document.querySelectorAll('.btn-ac').forEach(btn=>{//clicar 2 vezes
+            btn.addEventListener('dblclick', e=>{
+                this.toggleAudio()//controla estado do audio
+            })
+        })
         //this.setLastNumberToDisplay();
         /*set interval, settimeout
         ja começa a contar desde o primeiro tempo
@@ -56,6 +84,63 @@ class CalcController{
         setTimeout(() => {
             clearInterval(interval);//ele aqui pararia a função de atualizar o tempo executada com o setInterval
         }, 10000);*/
+    }
+    toggleAudio(){//controla estado do audio
+        this._audioOnOff = !this._audioOnOff //se audio for true esta ligado ent desliga, se tiver desligado liga
+    }
+    playAudio(){
+        if(this._audioOnOff){
+            this._audio.currentTime = 0;//zero o tempo para que ele possa tocar mesmo sem ter terminado
+            this._audio.play();
+        }
+    }
+    initKeyboard(){
+        document.addEventListener('keyup', e=>{//começando um evento de ouvir ações, ele ouve o aperto das teclas e faz a função e
+            //console.log(e.key, 'testando evento e')
+
+            this.playAudio()
+            switch(e.key){
+                case 'Escape':
+                    this.clearAll();
+                    break;
+                case 'Backspace':
+                    this.clearEntry();
+                    break;
+                case '+':
+                case '-':
+                case '*':
+                case '/':
+                case '%':
+                    this.addOperation(e.key);
+                    break;
+                case 'Enter':
+                case '=':
+                    this.calc();
+                    break;
+                case '.':
+                case ',':
+                    this.addDot();
+                    break;
+                case '0':
+                case '1':
+                case '2':
+                case '3':
+                case '4':
+                case '5':
+                case '6':
+                case '7':
+                case '8':
+                case '9':
+                    this.addOperation(parseInt(e.key));
+                    break;
+                case 'c':
+                    if(e.ctrlKey){//ao apertar o C para entrar no case o CTRL era true?(esta sendo segurado)
+                        this.copyToClipBoard()
+                    }
+                    this.copyToClipBoard()
+                    break;
+            }
+        });
     }
 
     addEventListenerAll(element, events, fn){//criando um evento para executar vários eventos quando clicar num botao
@@ -73,6 +158,8 @@ class CalcController{
 
     clearAll(){//método para limpar tudo, usado quando clica no botao AC da calculadora
         this._operation = [];
+        this._lastNumber = '';
+        this._lastOperator ='';
         this.setLastNumberToDisplay();
     }
     clearEntry(){//método para limpar o último valor colocado, usado quando clica no botao CE da calculadora
@@ -98,7 +185,15 @@ class CalcController{
     }
     getResult(){
         //console.log('getresult', this._operation)
-        return eval(this._operation.join(""))
+        try{
+            return eval(this._operation.join(""))
+        }catch(e){
+            console.log(e)
+            this.setError();
+            this.clearAll();
+            
+        }
+        
     }
     calc(){//vamos calcular os 2 valores que chegaram com o seu operador
 
@@ -215,18 +310,32 @@ class CalcController{
             }else{
                 //Number
                 let newValue = this.getLastOperation().toString() + value.toString()//preciso transformar em string pois se eu teclar 2 e depois 3, não vira 23, vira 5, no string vira 23
-                this.setLastOperation(parseInt(newValue));//adiciona no array
+                this.setLastOperation(newValue);//adiciona no array
                 //atualizar display
                 this.setLastNumberToDisplay();
             }
-            
         }
         console.log(this._operation);
+    }
 
-
+    addDot(){
+        let lastOperation = this.getLastOperation();
         
+        //lastOperation.split('').indexOf('.') > -1 pego a última operação da calca, divido cad a membro dela com o split e verifico com indexof se tem o . no array
+        //se tiver o index retorna a casa do '.', ent sera de 0 pra frente, se ele nao achar ent retorna -1
+        //typeof lastOperation === 'string' verifica se nessa operation tem um texto nela, se nao tiver quer dizer que nao tem nada ent verifica se tem um ponto para caso  ja tenha um ponto nao pode passar
+        if(typeof lastOperation === 'string' && lastOperation.split('').indexOf('.') > -1) return;//verifica se ela existe e se ja possui um ponto se sim ele sai do método com o return
+
+        console.log(lastOperation)
+        if(this.isOperator(lastOperation) || !lastOperation){//Se o último do array for um operador ou nao for nada
+            this.pushOperation('0.')//Adiciona um 0. 
+        }else{//agora se tiver um número por último ent
+            this.setLastOperation(lastOperation.toString() + '.')//vai pegar a última coisa que tem, transforma em string e concatena com um '.'
+        }
+        this.setLastNumberToDisplay();//atualiza o display
     }
     execBtn(value){//vou descobrir qual botao foi clicado e fazer a função de cada um
+        this.playAudio();
         switch(value){
             case 'ac':
                 this.clearAll();
@@ -253,7 +362,7 @@ class CalcController{
                 this.calc();
                 break;
             case 'ponto':
-                this.addOperation('.');
+                this.addDot();
                 break;
             case '0':
             case '1':
@@ -331,6 +440,10 @@ class CalcController{
     }
 
     set displayCalc(value){ //para setar o valor de dentro
+        if(value.toString().length > 10){
+            this.setError();
+            return false;
+        }
         return this._displayCalcEl.innerHTML = value;
     }
 
